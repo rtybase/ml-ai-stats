@@ -1,0 +1,299 @@
+<!DOCTYPE HTML>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<script>
+			// Point class
+			function Point(x, y) {
+				this.x = parseInt(x);
+				this.y = parseInt(y);
+			}
+
+			// Environment class
+			function Environment(n, m, prBlack) {
+				this.n = parseInt(n);
+				this.m = parseInt(m);
+				var prob = parseFloat(prBlack);
+
+				// initialise matrix
+				var countBlack = 0;
+				var countWhite = 0;
+				this.EnvMatrix = new Array(this.n);
+				for (i = 0; i < this.n; ++i) {
+					this.EnvMatrix[i] = new Array(this.m);
+					for (j = 0; j < this.m; ++j) {
+						var tmp_dist = 1.0*countBlack/(1.0*this.n*this.m);
+						if ((Math.random() <= prob) && (tmp_dist <= prob)) {
+							this.EnvMatrix[i][j] = 'black';
+							countBlack++;
+						}
+						else {
+							this.EnvMatrix[i][j] = 'white';
+							countWhite++;
+						}
+					}
+				}
+				// we need at least one white or black
+				if (countWhite == 0) this.EnvMatrix[0][0] = 'white';
+				else if (countBlack == 0) this.EnvMatrix[0][0] = 'black';
+
+				// initial robot position, known by the environment only
+				var x = Math.floor(Math.random()*this.m);
+				var y = Math.floor(Math.random()*this.n);
+				this.rPos = new Point(x, y);
+			}
+			Environment.prototype.readSensor = function() {
+				return this.EnvMatrix[this.rPos.y][this.rPos.x];
+			}
+			Environment.prototype.moveUp = function() {
+				this.rPos.y--;
+				if (this.rPos.y < 0) this.rPos.y = this.n-1;
+			}
+			Environment.prototype.moveDown = function() {
+				this.rPos.y++;
+				if (this.rPos.y > this.n-1) this.rPos.y = 0;
+			}
+			Environment.prototype.moveLeft = function() {
+				this.rPos.x--;
+				if (this.rPos.x < 0) this.rPos.x = this.m-1;
+			}
+			Environment.prototype.moveRight = function() {
+				this.rPos.x++;
+				if (this.rPos.x > this.m-1) this.rPos.x = 0;
+			}
+			Environment.prototype.print = function() {
+				var str = "";
+				for (i = 0; i < this.EnvMatrix.length; ++i) {
+					for (j = 0; j < this.EnvMatrix[i].length; ++j) {
+						str = str + "[" + this.EnvMatrix[i][j] + "]";
+					}
+					str = str + "\n";
+				}
+				alert(str);
+			}
+
+			// Robot2 class
+			function Robot(envMatrix) {
+				this.EnvMatrix = envMatrix;
+				this.sensor_right = 1.0; // sensor read probability
+				this.p_move = 1.0; // move probability
+				this.latestRead = "";
+
+				// set the uniform distribution
+				this.ProbMatrix = new Array(this.EnvMatrix.length);
+				for (i = 0; i < this.ProbMatrix.length; ++i) {
+					this.ProbMatrix[i] = new Array(this.EnvMatrix[i].length);
+					for (j = 0; j < this.ProbMatrix[i].length; ++j) {
+						this.ProbMatrix[i][j] = 1.0/(this.EnvMatrix.length * this.EnvMatrix[i].length);
+					}
+				}
+
+			}
+			// adjust probability distribution based on the 
+			// data read from the environment
+			Robot.prototype.sense = function(envData) {
+				var q = new Array(this.ProbMatrix.length);
+				var sum = 0.0;
+				this.latestRead = envData;
+
+				for (i = 0; i < q.length; ++i) {
+					q[i] = new Array(this.ProbMatrix[i].length);
+					for (j = 0; j < q[i].length; ++j) {
+						var hit = (envData == this.EnvMatrix[i][j])?1.0:0.0;
+						q[i][j] = this.ProbMatrix[i][j] * (hit * this.sensor_right + (1 - hit) * (1 - this.sensor_right));
+						sum += 1.0 * q[i][j];
+					}
+				}
+
+				// normalise
+				for (i = 0; i < q.length; ++i) {
+					for (j = 0; j < q[i].length; ++j) q[i][j] = q[i][j]/sum;
+				}
+  
+				this.ProbMatrix = q;
+			}
+			// adjust probability distribution
+			// based on move
+			Robot.prototype.move = function(direction) {
+				var q = new Array(this.ProbMatrix.length);
+				for (i = 0; i < q.length; ++i) {
+					q[i] = new Array(this.ProbMatrix[i].length);
+					for (j = 0; j < q[i].length; ++j) {
+						var new_i = i - direction[0];
+						if (new_i < 0) new_i = q.length - 1;
+						else if (new_i > q.length - 1) new_i = 0;
+
+						var new_j = j - direction[1];
+						if (new_j < 0) new_j = q[i].length - 1;
+						else if (new_j > q[i].length - 1) new_j = 0;
+
+						q[i][j] = this.p_move * this.ProbMatrix[new_i][new_j] + (1.0 - this.p_move) * this.ProbMatrix[i][j];
+					}
+				}
+				this.ProbMatrix = q;
+			}
+			Robot.prototype.print = function() {
+				var str = "Latest read: " + this.latestRead + "\n";
+				for (i = 0; i < this.ProbMatrix.length; ++i) {
+					for (j = 0; j < this.ProbMatrix[i].length; ++j) {
+						str = str + "[" + this.ProbMatrix[i][j].toFixed(3) + "]";
+					}
+					str = str + "\n";
+				}
+				document.forms[1].out.value = str;
+			}
+
+			var context;
+			var env;
+			var robot;
+			var Max = new Point(0, 0);
+
+			function drawCircle(x, y, radius, color) {
+				context.beginPath();
+				context.strokeStyle = color;
+				context.fillStyle = color;
+				context.arc(x, y, radius, 0, Math.PI*2, true);
+				context.stroke();
+				context.fill();
+				context.closePath();
+			}
+
+			function drawSqare(x, y, w, h, lcolor, fcolor) {
+				context.fillStyle = fcolor;
+				context.fillRect(x, y, w, h);
+				context.strokeStyle = lcolor;
+				context.strokeRect(x, y, w, h);
+			}
+
+			// clear the canvas
+			function clearTable() {
+				context.fillStyle = "#ffffff";
+				context.fillRect(0, 0, Max.x, Max.y);
+			}
+
+			// draw the environment
+			function drawEnv(environment, ro) {
+				clearTable();
+				// draw the environment
+				var w = Max.x/environment.m;
+				var h = Max.y/environment.n;
+
+				for (i = 0; i < environment.n; ++i) {
+					for (j = 0; j < environment.m; ++j) {
+						if (env.EnvMatrix[i][j] == 'black') drawSqare(j*w, i*h, w, h, '#000000', '#000000');
+						else drawSqare(j*w, i*h, w, h, '#000000', '#FFFFFF');
+					}
+				}
+
+				// draw the robot belief space
+				var x = 0;
+				var y = 0;
+				for (i = 0; i < ro.ProbMatrix.length; ++i) {
+					for (j = 0; j < ro.ProbMatrix[i].length; ++j) {
+						if (ro.ProbMatrix[i][j] >= 0.00001) {
+							x = Math.floor(j*w + w/2 + 2);
+							y = Math.floor(i*h + h/2 + 2);
+							drawCircle(x, y, 4, '#FF0000');
+						}
+					}
+				}
+
+				// draw the robot
+				x = Math.floor(environment.rPos.x*w + w/2);
+				y = Math.floor(environment.rPos.y*h + h/2);
+				drawCircle(x, y, 4, '#00FF00');
+			}
+
+			// initialise the canvas drawing
+			function init() {
+				var canvas = document.getElementById("chart");
+				if (canvas.getContext) {
+					Max.x = canvas.width;
+					Max.y = canvas.height;
+					context = canvas.getContext("2d");
+					clearTable();
+				}
+				else alert("getContext unsupported.");
+			}
+
+			// start the localisation
+			function startLocalisation() {
+				var N = parseInt(document.forms[0].N.value);
+				var M = parseInt(document.forms[0].M.value);
+				var pr = parseFloat(document.forms[0].prBlack.value);
+				if ((N>=2 && N<=50) && (M>=2 && M<=50) && (pr>=0.1 && pr<=0.9)) {
+					// initialise the environment
+					env = new Environment(N, M, pr);
+					robot = new Robot(env.EnvMatrix);
+					robot.move([0.0, 0.0]);
+					var envData = env.readSensor();
+					robot.sense(envData);
+					robot.print();
+					drawEnv(env, robot);
+				}
+
+			}
+
+			function up() {
+				if (!env) return;
+				env.moveUp();
+				robot.move([-1.0, 0.0]);
+				var envData = env.readSensor();
+				robot.sense(envData);
+				robot.print();
+				drawEnv(env, robot);
+			}
+
+			function down() {
+				if (!env) return;
+				env.moveDown();
+				robot.move([1.0, 0.0]);
+				var envData = env.readSensor();
+				robot.sense(envData);
+				robot.print();
+				drawEnv(env, robot);
+			}
+
+			function left() {
+				if (!env) return;
+				env.moveLeft();
+				robot.move([0.0, -1.0]);
+				var envData = env.readSensor();
+				robot.sense(envData);
+				robot.print();
+				drawEnv(env, robot);
+			}
+
+			function right() {
+				if (!env) return;
+				env.moveRight();
+				robot.move([0.0, 1.0]);
+				var envData = env.readSensor();
+				robot.sense(envData);
+				robot.print();
+				drawEnv(env, robot);
+			}
+
+			onload = init;			
+		</script>
+	</head>
+	<body>
+		Monte-Carlo localisation algorithm demo.<br/>
+		<form>
+			<label>Define the world (N x M), N: <input type="number" name="N" min="2" max="50" value="2"></label>
+			<label>M: <input type="number" name="M" min="2" max="50" value="2"></label>
+			<label>Probability of black squares: <input type="number" name="prBlack" min="0.1" max="0.9" step="0.1" value="0.1"></label>
+			<input type="button" name="Start" value="Start" onClick="startLocalisation();">
+		</form>
+		<canvas id="chart" width="800" height="400" style="border:1px solid #c3c3c3;">
+		</canvas>
+		<form>
+			<table border="0">
+				<tr><td>&nbsp;</td><td><input type="button" name="Up" value=" Up  " onClick="up();"></td><td>&nbsp;</td><td>&nbsp;</td><td bgcolor="red">&nbsp;&nbsp;&nbsp;</td><td>- the robot believes it is in this position</td></tr>
+				<tr><td><input type="button" name="Left" value="Left " onClick="left();"></td><td>&nbsp;</td><td><input type="button" name="Right" value="Right" onClick="right();"></td><td>&nbsp;</td><td bgcolor="green">&nbsp;&nbsp;&nbsp;</td><td>- actual position</td></tr>
+				<tr><td>&nbsp;</td><td><input type="button" name="Down" value="Down " onClick="down();"></td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+			</table>
+			<label>Robot's belief:<br/></label><textarea name="out" cols="90" rows="20" WRAP="OFF"></textarea>
+		</form>
+	</body>
+</html>

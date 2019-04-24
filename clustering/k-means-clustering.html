@@ -1,0 +1,235 @@
+<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <script>
+		function Point(x, y) {
+			this.x = parseFloat(x);
+			this.y = parseFloat(y);
+		}
+		Point.prototype.sqareDistance = function(p) {
+			return Math.pow(this.x - p.x, 2)*1.0 + Math.pow(this.y - p.y, 2)*1.0;
+		}
+
+		var Colors = ["#000000","#FF0000","#00AA00","#0000FF","#00DDDD","#FF00FF","#FFA500","#888800"];
+		var Error = 0.01;
+		var context;
+		var Origin = new Point(0, 0);
+		var Max = new Point(0, 0);
+		var Offset = new Point(0, 0);
+
+		var Points = [];
+
+		function drawCircle(x, y, radius, color) {
+			context.beginPath();
+			context.strokeStyle = color;
+			context.arc(x, Origin.y-y, radius, 0, Math.PI*2, true);
+			context.stroke();
+			context.closePath();
+		}
+
+		function drawLine(x1, y1, x2, y2, color) {
+			context.beginPath();
+			context.strokeStyle = color;
+			context.moveTo(x1, Origin.y - y1);
+			context.lineTo(x2, Origin.y - y2);
+			context.stroke();
+			context.closePath();
+		}
+
+		function clearTable() {
+			context.fillStyle = "#f0f0f0";
+			context.fillRect(0, 0, Max.x, Max.y);
+			drawLine(0, 1, Max.x, 1, "#0000FF");
+			drawLine(1, Max.y, 1, 0, "#0000FF");
+			var len = Colors.length;
+			for (var i=0;i<len;i++) {
+				drawLine(Max.x*7.0/8, (Max.y*2.0/3)+i*10, (Max.x*7.0/8)+40, (Max.y*2.0/3)+i*10, Colors[i]);
+			}
+		}
+
+		function mouseUpE(e) {
+			var x = e.pageX - Offset.x;
+			var y = e.pageY - Offset.y;
+			addNewPoint(x, Origin.y - y);
+		}
+
+		function init() {
+			Points = [];
+
+			var canvas = document.getElementById("chart");
+			if (canvas.getContext) {
+				Origin.y = canvas.height;
+				Max.x = canvas.width;
+				Max.y = canvas.height;
+				context = canvas.getContext("2d");
+				clearTable();
+
+				Offset.x = canvas.offsetLeft;
+				Offset.y = canvas.offsetTop;
+				canvas.addEventListener("mouseup", mouseUpE);
+			}
+			else alert("getContext unsupported.");
+		}
+
+		function addPoint() {
+			var x = parseFloat(document.forms[0].x.value);
+			var y = parseFloat(document.forms[0].y.value);
+			addNewPoint(x, y);
+		}
+
+		function addNewPoint(x, y) {
+			if ((x>=0 && x<=Max.x) && (y>=0 && y<=Max.y)) {
+				var len = Points.length;
+				var p = new Point(x, y);
+				for (var i=0;i<len;i++) {
+					var dist = Points[i].sqareDistance(p);
+					if (dist < Error) return;
+				}
+				drawCircle(x, y, 2, "#FF0000");
+				Points.push(p);
+			}
+		}
+
+		function initKernels(k) {
+			var Kernels = new Array();
+
+			var i = 0;
+			var len = Points.length;
+
+			var tmpArr = new Array(len);
+			for (var j=0;j<len;j++) tmpArr[j] = true;
+
+			while ((i < k)&&(i < len)) {
+				var j = Math.floor(Math.random()*len);
+				if (tmpArr[j]) {
+					Kernels.push(Points[j]);
+					tmpArr[j] = false;
+					i++;
+				}
+			}
+			return Kernels;
+		}
+
+		function findClosestKernel(p, Kernels) {
+			var min = 1000000.0;
+			var ret = 0;
+			var len = Kernels.length;
+			for (var i=0;i<len;i++) {
+				var dist = p.sqareDistance(Kernels[i]);
+				if (dist <= min) {
+					min = dist;
+					ret = i;
+				}
+			}
+			return ret;
+		}
+
+		function rebuildKernel(n, CloseKernels) {
+			var len = CloseKernels.length;
+			var num = 0;
+			var X_m = 0.0;
+			var Y_m = 0.0;
+
+			for (var i=0;i<len;i++) {
+				if (CloseKernels[i]==n) {
+					X_m += Points[i].x*1.0;
+					Y_m += Points[i].y*1.0;
+					num++;
+				}
+			}
+			if (num > 0) {
+				X_m = X_m*1.0/num;
+				Y_m = Y_m*1.0/num;
+			}
+			return new Point(X_m, Y_m);
+		}
+
+		function checkK(OldKernels, Kernels) {
+			var ret = 0;
+			var len = Kernels.length;
+			for (var i=0;i<len;i++) {
+				if (Kernels[i].sqareDistance(OldKernels[i]) < Error) ret++;
+			}
+			return ret;
+		}
+
+		function calculateCost(CloseKernels, Kernels) {
+			var len = Points.length;
+			var ret = 0.0;
+			for (var i=0;i<len;i++) {
+				ret += 1.0*Points[i].sqareDistance(Kernels[CloseKernels[i]]);
+			}
+			return ret/len;
+		}
+
+		function computeClusters() {
+			var iter = 100;
+			var len = Points.length;
+			var k = parseInt(document.forms[1].k.value);
+			if ((len < 2)||(len<k)) {
+				alert("Insufficient number of points.");
+				return;
+			}
+
+			if ((k<2)||(k>8)) {
+				alert("Unsupported number of clusters.");
+				return;
+			}
+
+			var mincost = 1000000.0;
+			var minCloseKernels = [];
+
+			while (iter > 0) {
+				var Kernels = initKernels(k);
+				var CloseKernels = new Array(len);
+				var k_eq = 0;
+
+				do {
+					for (var i=0;i<len;i++) {
+						CloseKernels[i] = findClosestKernel(Points[i], Kernels);
+					}
+
+					var OldKernels = Kernels;
+					Kernels = new Array(k);
+
+					for (var i=0;i<k;i++) {
+						Kernels[i] = rebuildKernel(i, CloseKernels);
+					}
+					k_eq = checkK(OldKernels, Kernels);
+				} while (k_eq < k);
+
+				var cost = calculateCost(CloseKernels, Kernels);
+				if (cost <= mincost) {
+					mincost = cost;
+					minCloseKernels = CloseKernels;
+				}
+				iter--;
+			}
+
+			clearTable();
+			for (var i=0;i<len;i++) {
+				drawCircle(Points[i].x, Points[i].y, 2, Colors[minCloseKernels[i]]);
+			}
+		}
+
+		onload = init;			
+    </script>
+  </head>
+  <body>
+    Clustering algorithm demo:<br/>
+    <form>
+      <label>Coordinate X: <input type="number" name="x" min="0" max="800" value="0"></label>
+      <label>Coordinate Y: <input type="number" name="y" min="0" max="400" value="0"></label>
+      <input type="button" name="add" value="Add" onClick="addPoint();">
+      <input type="button" name="clear" value="Clear" onClick="init();"><br/>
+    </form>
+    Chart (click on canvas to define a point):<br/>
+    <canvas id="chart" width="800" height="400" style="border:1px solid #c3c3c3;">
+    </canvas>
+    <form>
+      <label>Number of clusters K (2-8): <input type="number" name="k" min="2" max="8" value="2"></label>
+      <input type="button" name="build" value="Build Clusters" onClick="computeClusters();">
+    </form>
+  </body>
+</html>

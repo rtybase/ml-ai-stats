@@ -1,0 +1,166 @@
+<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/c3/0.7.0/c3.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/5.9.2/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/c3/0.7.0/c3.min.js"></script>
+
+    <script>
+      function calculateWinningOdds(probabilityOfSingleTicketToWin, numberOfTickets) {
+        return 1.0 - Math.pow(1.0 - probabilityOfSingleTicketToWin, numberOfTickets);
+      }
+
+      function winingExpectation(winningOdds) {
+        var expectation = 1.0 / winningOdds;
+        if (expectation < 1.0) {
+          return 1.0;
+        }
+        return Math.round(expectation + 0.5);
+      }
+
+      function calculateNoOfTicketsFor(expectedWinningOdds, probabilityOfSingleTicketToWin) {
+        var rawValue = Math.log(1.0 - expectedWinningOdds) / Math.log(1.0 - probabilityOfSingleTicketToWin);
+        return Math.round(rawValue + 0.5);
+      }
+
+      function calculateXScaleRatio(from, to, maxNodes) {
+        var ratio = (to - from + 1.0) / maxNodes;
+        if (ratio <= 1.0) {
+          return 1;
+        }
+        return Math.round(ratio + 0.5);
+      }
+
+      function populateXarray(x, from, to, maxNodes) {
+        var ratio = calculateXScaleRatio(from, to, maxNodes);
+        for (var i = from; i < to; i += ratio) {
+          x.push(i);
+        }
+      }
+
+      function computeXs(probabilityOfSingleTicketToWin) {
+	var probabilityRanges = [ [0.0001, 10],
+          [0.001, 10],
+          [0.01, 10],
+          [0.1, 10],
+          [0.2, 10],
+          [0.5, 20],
+          [0.75, 30],
+          [0.99, 40] ];
+
+        var x = [];
+        var from = 1;
+        for (var i = 0; i < probabilityRanges.length; i++) {
+          var to = calculateNoOfTicketsFor(probabilityRanges[i][0], probabilityOfSingleTicketToWin);
+          if (to > from) {
+            populateXarray(x, from, to, probabilityRanges[i][1]);
+            from = to;
+          }
+        }
+        x.push(from);
+        return x;
+      }
+
+      function updateChart(chart, xs, data) {
+        chart.load({
+          columns: [xs, data]
+        });
+      }
+
+      function computeProbabilityOfSingleTicketToWin() {
+        if (document.forms[0].input_as_probability.value == "true") {
+          return parseFloat(document.forms[0].prob_single_ticket_win.value);
+        }
+
+        var nom = parseInt(document.forms[0].nominator.value);
+        var denom = parseInt(document.forms[0].denominator.value);
+        if (denom > 0.0) {
+          return (1.0 * nom) / denom;
+        }
+
+        return 0.0;
+      }
+
+      function updateOddsCharts() {
+        var probabilityOfSingleTicketToWin = computeProbabilityOfSingleTicketToWin();
+        if (probabilityOfSingleTicketToWin > 0.0 && probabilityOfSingleTicketToWin < 1.0) {
+          var halfOddsTickets = calculateNoOfTicketsFor(0.5, probabilityOfSingleTicketToWin);
+          var textOdds = document.getElementById("text_odds");
+
+          textOdds.innerHTML = "<p>Number of tickets to have a 0.5 chance is: " + halfOddsTickets + "</p>";
+
+          var xCoords = computeXs(probabilityOfSingleTicketToWin);
+          var xs = ['x'];
+          var odds = ['odds'];
+          var expectations = ['expectations'];
+
+          for (var i = 0; i < xCoords.length; i++) {
+            var winOdds = calculateWinningOdds(probabilityOfSingleTicketToWin, xCoords[i]);
+            xs.push(xCoords[i]);
+            odds.push(winOdds);
+            expectations.push(winingExpectation(winOdds));
+          } 
+
+          updateChart(chartOdds, xs, odds);
+          updateChart(chartExpectations, xs, expectations);
+        } else {
+          alert("Probability of " + probabilityOfSingleTicketToWin + " is out of (0,1) range!");
+        }
+      }
+
+      function activateProbabilityInputs() {
+        document.forms[0].prob_single_ticket_win.disabled = false;
+        document.forms[0].nominator.disabled = true;
+        document.forms[0].denominator.disabled = true;
+      }
+
+      function activateOddsInputs() {
+        document.forms[0].prob_single_ticket_win.disabled = true;
+        document.forms[0].nominator.disabled = false;
+        document.forms[0].denominator.disabled = false;
+      }
+    </script>
+  </head>
+  <body>
+    <form>
+      <input type="radio" name="input_as_probability" value="false" checked onclick="activateOddsInputs();"/><label>Odds of 1 ticket to win: <input type="number" name="nominator" min="1" step="1" value="1"/> to <input type="number" name="denominator" min="1" step="1" value="1"/></label><br/>
+      <input type="radio" name="input_as_probability" value="true" onclick="activateProbabilityInputs();"/><label>Probability of 1 ticket to win: <input type="number" name="prob_single_ticket_win" min="0.0" max="1" step="0.1" value="0.0" disabled/></label><br>
+      <input type="button" name="Start" value="Calculate" onClick="updateOddsCharts();"/>
+    </form>
+
+    <div id="text_odds"></div>
+    <hr/>
+    <p>Probability of winning anything depending on the number of tickets:</p>
+    <div id="chart_odds"></div>
+    <hr/>
+    <p>Expectation or mean of how many rounds it will take to win anything, depending on the number of tickets:</p>
+    <div id="chart_expectations"></div>
+
+    <script>
+        var chartOdds = c3.generate({
+            bindto: '#chart_odds',
+            data: {
+              x: 'x',
+              columns: [ ['x', 0], ['odds', 0] ]
+            },
+            grid: {
+              x: { show: true },
+              y: { show: true }
+            }
+        });
+
+        var chartExpectations = c3.generate({
+            bindto: '#chart_expectations',
+            data: {
+              x: 'x',
+              columns: [ ['x', 0], ['expectations', 0] ]
+            },
+            grid: {
+              x: { show: true },
+              y: { show: true }
+            }
+        });
+    </script>
+  </body>
+</html>
