@@ -1,0 +1,396 @@
+<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/c3/0.7.0/c3.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/5.9.2/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/c3/0.7.0/c3.min.js"></script>
+    <script>
+      // --------------------- Global vars ----------------------------------------------------
+      const ITEMS_PER_PAGE = 90;
+      const MAXIMUM_PAGES = 70; // Ebay will complain for values > 100
+      const APPLY_LAPLACE_SMOOTHING = true;
+
+      var urlBuilder = null;
+      var priceOnlyBucket = null;
+      var priceAndShippingBucket = null;
+
+      // --------------------- Ebay Url builder class -----------------------------------------
+      function EbayUrlBuilder(appID, globalID, keywords, condition, period) {
+        this.url = "https://svcs.ebay.com/services/search/FindingService/v1";
+        this.url += "?OPERATION-NAME=findCompletedItems";
+        this.url += "&SERVICE-VERSION=1.7.0";
+        this.url += "&SECURITY-APPNAME=" + appID;
+        this.url += "&RESPONSE-DATA-FORMAT=JSON";
+        this.url += "&REST-PAYLOAD";
+        this.url += "&callback=collectData";
+        this.url += "&GLOBAL-ID=" + globalID;
+        this.url += "&keywords=" + encodeURI(keywords);
+
+        var parameterOrder = 0;
+        if (condition != "") {
+          this.url += addFilter(parameterOrder++, "Condition", condition);
+        }
+        this.url += addFilter(parameterOrder++, "FreeShippingOnly", "false");
+        this.url += addFilter(parameterOrder++, "SoldItemsOnly", "false");
+        this.url += addFilter(parameterOrder++, "HideDuplicateItems", "true");
+        this.url += addFilter(parameterOrder++, "StartTimeFrom", currentTimeLess(-1 * parseInt(period)));
+        this.url += addFilter(parameterOrder++, "EndTimeTo", currentTimeLess(0));
+        this.url += "&sortOrder=PricePlusShippingLowest";
+        this.url += "&paginationInput.entriesPerPage=" + ITEMS_PER_PAGE;
+      }
+
+      EbayUrlBuilder.prototype.forPage = function(page) {
+        return this.url + "&paginationInput.pageNumber=" + page;
+      }
+
+      function currentTimeLess(days) {
+        var currentTimeUtcMs = Date.now();
+        if (days == 0) {
+          // one minute less, otherwise Ebay complains the time is in the future
+          currentTimeUtcMs -= 60 * 1000;
+        } else {
+          currentTimeUtcMs += days * 24 * 60 * 60 * 1000;
+        }
+        var date = new Date(currentTimeUtcMs);
+        return date.toISOString();
+      }
+
+      function addFilter(order, name, value) {
+        var filter = "&itemFilter(" + order +").name=" + name;
+        filter += "&itemFilter(" + order + ").value=" + value;
+        return filter;
+      }
+
+      // --------------------- Buckets class --------------------------------------------------
+      function Buckets(bucketWidth) {
+        this.bucketWidth = parseInt(bucketWidth);
+        this.allBuckets = {};
+        this.allBucketKeys = [];
+        this.allAuctions = 0;
+        this.allAuctionsWithSell = 0;
+      }
+
+      Buckets.prototype.addPrice = function(price, sold) {
+        var bucketKey = computePriceBucketKey(price, this.bucketWidth);
+
+        if (!this.allBuckets[bucketKey]) {
+          this.allBuckets[bucketKey] = {"allAuctions": 0, "allAuctionsWithSell": 0};
+          this.allBucketKeys.push(bucketKey);
+        }
+
+        this.allAuctions++;
+        this.allBuckets[bucketKey].allAuctions++;
+        if (sold) {
+          this.allAuctionsWithSell++;
+          this.allBuckets[bucketKey].allAuctionsWithSell++;
+        }
+      }
+
+      Buckets.prototype.getBucketKeys = function() {
+        this.allBucketKeys.sort(function(a, b) {return a - b});
+        return this.allBucketKeys;
+      }
+
+      function computePriceBucketKey(price, bucketWidth) {
+        return parseInt((parseInt(price * 100) / bucketWidth)) * bucketWidth;
+      }
+
+      // --------------------- Data Collector -------------------------------------------------
+      function collectData(data) {
+        if (data['findCompletedItemsResponse'][0]['ack'] == "Success") {
+          var currentPage = parseInt(data['findCompletedItemsResponse'][0]['paginationOutput'][0]['pageNumber'][0]);
+          var totalPages = parseInt(data['findCompletedItemsResponse'][0]['paginationOutput'][0]['totalPages'][0]);
+
+          if (currentPage <= 1 && totalPages > MAXIMUM_PAGES) {
+            alert("Please refine search for criteria! The result set of " + totalPages + " pages is too big!");
+            return;
+          }
+          if (totalPages <= 0) {
+            alert("Please refine search for criteria! 0 pages returned from Ebay!");
+            return;
+          }
+
+          // collect data
+          var items = data['findCompletedItemsResponse'][0]['searchResult'][0]['item'];
+          for (var i = 0; i < items.length; i++) {
+            var sold = items[i]['sellingStatus'][0]['sellingState'][0] == "EndedWithSales";
+            var price = parseFloat(items[i]['sellingStatus'][0]['convertedCurrentPrice'][0]['__value__']);
+            var shippingPrice = 0.0;
+            if (items[i]['shippingInfo'][0]['shippingServiceCost']) {
+              shippingPrice = parseFloat(items[i]['shippingInfo'][0]['shippingServiceCost'][0]['__value__']);
+            }
+
+            priceOnlyBucket.addPrice(price, sold);
+            priceAndShippingBucket.addPrice(price + shippingPrice, sold);
+          }
+          // draw progress
+          var progress = (currentPage * 100) / totalPages;
+          say("Loaded " + progress.toFixed(2) + "% so far");
+
+          if (currentPage < totalPages) {
+              getData(currentPage + 1);
+          } else {
+            say("Drawing ...");
+            updateChartWithData(priceOnlyBucket, barsOddsWithoutShippment, barsStatsWithoutShippment);
+            updateChartWithData(priceAndShippingBucket, barsOddsWithShippment, barsStatsWithShippment);
+            say("Done.");
+          }
+        } else {
+          alert("Ebay call failed!");
+        }
+      }
+
+      function getData(page) {
+        if (page <= 1) {
+          if (document.forms[0]['appID'].value.trim() == "") {
+            alert("Please provide appID!");
+            return;
+          }
+          if (document.forms[0]['keywords'].value.trim() == "") {
+            alert("Please provide search criteria!");
+            return;
+          }
+          priceOnlyBucket = new Buckets(document.forms[0]['BucketWidth'].value);
+          priceAndShippingBucket = new Buckets(document.forms[0]['BucketWidth'].value);
+          urlBuilder = new EbayUrlBuilder(
+            document.forms[0]['appID'].value,
+            document.forms[0]['GLOBAL-ID'].value,
+            document.forms[0]['keywords'].value,
+            document.forms[0]['Condition'].value,
+            document.forms[0]['Period'].value);
+        }
+
+        var url = urlBuilder.forPage(page);
+        cleanPreviousDataCall();
+        call(url);
+      }
+
+      function call(url) {
+        var head = document.getElementsByTagName('head');
+        var script = document.createElement('script');
+        script.type = "text/javascript";
+        script.src =  url;
+        script.id = "jsonp";
+        head[0].appendChild(script);
+      }
+
+      function cleanPreviousDataCall() {
+        var script = document.getElementById("jsonp");
+        if (script) {
+          script.parentNode.removeChild(script);
+          for (var property in script) delete script[property];
+        }
+      }
+
+      // --------------------- Maths ----------------------------------------------------------
+      function computeOdds(totalAuctions, totalSoldAuctions, totalBucketAuctions, totalBucketSoldAuctions) {
+        var result = 1.0 * totalSoldAuctions * totalBucketSoldAuctions;
+        if (result <= 0.000001) {
+          return 0.0;
+        }
+        result = (totalBucketAuctions - totalBucketSoldAuctions) * (totalAuctions - totalSoldAuctions) / result;
+        return 1.0 / (1.0 + result);
+      }
+
+      function computeOddsForBucketKey(key, bucket) {
+        if (APPLY_LAPLACE_SMOOTHING) {
+          var numberOfBuckets = bucket.allBucketKeys.length;
+          return computeOdds(bucket.allAuctions + 2 * numberOfBuckets,
+                bucket.allAuctionsWithSell + numberOfBuckets,
+                bucket.allBuckets[key].allAuctions + 2,
+                bucket.allBuckets[key].allAuctionsWithSell + 1);
+
+        } else {
+          return computeOdds(bucket.allAuctions,
+                bucket.allAuctionsWithSell,
+                bucket.allBuckets[key].allAuctions,
+                bucket.allBuckets[key].allAuctionsWithSell);
+        }
+      }
+
+      // --------------------- UI Stuff -------------------------------------------------------
+      function say(text) {
+        document.getElementById("progress").innerHTML = "<p>" + text + "</p>";
+      }
+
+      function updateChartWithData(bucket, oddsChart, statsChart) {
+//        alert(JSON.stringify(bucket));
+
+        var xs = ['x'];
+        var odds = ['Sell Odds'];
+        var allAuctions = ['All Auctions'];
+        var soldAuctions = ['Sold Auctions'];
+
+        var keys = bucket.getBucketKeys();
+        for (var i = 0; i < keys.length; i++) {
+          xs.push(computeBucketLabel(keys[i], bucket.bucketWidth));
+          odds.push(computeOddsForBucketKey(keys[i], bucket));
+          allAuctions.push(bucket.allBuckets[keys[i]].allAuctions);
+          soldAuctions.push(bucket.allBuckets[keys[i]].allAuctionsWithSell);
+        }
+
+        oddsChart.load({
+          columns: [xs, odds]
+        });
+        statsChart.load({
+          columns: [xs, allAuctions, soldAuctions]
+        });
+      }
+
+      function computeBucketLabel(key, bucketWidth) {
+        var start = key / 100.0;
+        var end = (key + bucketWidth) / 100.0;
+        return "" + start.toFixed(2) + "-" + end.toFixed(2);
+      }
+    </script>
+  </head>
+  <body>
+    <form>
+      <table border="0" cellpadding="0" cellspacing="1">
+      <tr>
+        <td valign="top" align="right"><label>Your Ebay appID (more details <a href="https://developer.ebay.com/Devzone/shopping/docs/Concepts/ShoppingAPIGuide.html#appid">here</a>): </label></td>
+        <td valign="top"><input type="text" name="appID" maxlength="128" size="50" value=""/></td>
+      </tr>
+      <tr>
+        <td valign="top" align="right"><label>Search for: </label></td>
+        <td valign="top"><input type="text" name="keywords" maxlength="256" size="80"/></td>
+      </tr>
+      <tr>
+        <td valign="top" align="right"><label>Ebay market: </label></td>
+        <td valign="top">
+          <select name="GLOBAL-ID">
+            <option value="EBAY-US">USA (prices in USD)</option>
+            <option value="EBAY-GB" selected>UK (prices in GBP)</option>
+            <option value="EBAY-FR">France (prices in EUR)</option>
+            <option value="EBAY-DE">Germany (prices in EUR)</option>
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <td valign="top" align="right"><label>Condition: </label></td>
+        <td valign="top">
+          <select name="Condition">
+            <option value="" selected>All</option>
+            <option value="1000">New</option>
+            <option value="3000">Used</option>
+            <option value="5000">Good</option>
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <td valign="top" align="right"><label>For the last: </label></td>
+        <td valign="top">
+          <select name="Period">
+            <option value="5">Last 5 days</option>
+            <option value="10" selected>Last 10 days</option>
+            <option value="30">Last 30 days</option>
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <td valign="top" align="right"><label>Price bucket width (e.g. pences/cents/eurocents): </label></td>
+        <td valign="top">
+          <select name="BucketWidth">
+            <option value="10">10</option>
+            <option value="50">50</option>
+            <option value="100" selected>100 (i.e. 1 pound/dollar/euro)</option>
+            <option value="500">500</option>
+            <option value="1000">1000</option>
+            <option value="2000">2000</option>
+            <option value="3000">3000</option>
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <td valign="top">&nbsp;</td>
+        <td valign="top"><input type="button" name="Start" value="Evaluate" onClick="getData(1);"/></td>
+      </tr>
+      </table>
+    </form>
+    <div id="progress" style="color:red;"></div>
+    <table border="0" cellpadding="0" cellspacing="1" width="95%">
+      <tr><td><hr/></td></tr>
+      <tr><td align="center"><p><b><i>Chances to sell by price buckets, excluding shipping prices:</i></b></p></td></tr>
+      <tr><td><div id="odds_without_shippment"></div></td></tr>
+      <tr><td><div id="stats_without_shippment"></div></td></tr>
+      <tr><td><hr/></td></tr>
+      <tr><td align="center"><p><b><i>Chances to sell by price buckets, including shipping prices:</i></b></p></td></tr>
+      <tr><td><div id="odds_with_shippment"></div></td></tr>
+      <tr><td><div id="stats_with_shippment"></div></td></tr>
+    </table>
+    <script>
+        var barsOddsWithoutShippment = c3.generate({
+            bindto: '#odds_without_shippment',
+            data: {
+              x : 'x',
+              columns: [ ['x', '0'], ['Sell Odds', 0] ],
+              type: 'bar'
+            },
+            zoom: { enabled: true },
+            axis: {
+              x: {
+                type: 'category',
+                tick: { rotate: 75, multiline: false },
+                height: 130
+              }
+            },
+            grid: { y: { show: true } }
+        });
+        var barsStatsWithoutShippment = c3.generate({
+            bindto: '#stats_without_shippment',
+            data: {
+              x : 'x',
+              columns: [ ['x', '0'], ['All Auctions', 0], ['Sold Auctions', 0] ],
+              type: 'bar'
+            },
+            bar: { width: { ratio: 0.5 } },
+            zoom: { enabled: true },
+            axis: {
+              x: {
+                type: 'category',
+                tick: { rotate: 75, multiline: false },
+                height: 130
+              }
+            },
+            grid: { y: { show: true } }
+        });
+
+        var barsOddsWithShippment = c3.generate({
+            bindto: '#odds_with_shippment',
+            data: {
+              x : 'x',
+              columns: [ ['x', '0'], ['Sell Odds', 0] ],
+              type: 'bar'
+            },
+            zoom: { enabled: true },
+            axis: {
+              x: {
+                type: 'category',
+                tick: { rotate: 75, multiline: false },
+                height: 130
+              }
+            },
+            grid: { y: { show: true } }
+        });
+        var barsStatsWithShippment = c3.generate({
+            bindto: '#stats_with_shippment',
+            data: {
+              x : 'x',
+              columns: [ ['x', '0'], ['All Auctions', 0], ['Sold Auctions', 0] ],
+              type: 'bar'
+            },
+            bar: { width: { ratio: 0.5 } },
+            zoom: { enabled: true },
+            axis: {
+              x: {
+                type: 'category',
+                tick: { rotate: 75, multiline: false },
+                height: 130
+              }
+            },
+            grid: { y: { show: true } }
+        });
+    </script>
+  </body>
+</html>
