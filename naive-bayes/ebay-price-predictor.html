@@ -209,6 +209,110 @@
         }
       }
 
+      // --------------------- appID handling and crypto --------------------------------------
+      function stringToBytes(message) {
+        let enc = new TextEncoder();
+        return enc.encode(message);
+      }
+
+      function bytesToString(bytes) {
+        let dec = new TextDecoder();
+        return dec.decode(bytes);
+      }
+
+      function bytesBufferToBase64(buffer) {
+        return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)));
+      }
+
+      function base64ToBytesBuffer(base64String) {
+        return Uint8Array.from(atob(base64String), c => c.charCodeAt(0));
+      }
+
+      async function getKeyMaterial(textToDisplay) {
+        let password = window.prompt(textToDisplay);
+        if (password) {
+          let keyMaterial = await window.crypto.subtle.importKey(
+            'raw', stringToBytes(password),
+            {'name': 'PBKDF2'}, false, ['deriveBits', 'deriveKey']);
+          return keyMaterial;
+        }
+        return null;
+      }
+
+      async function generateKey(keyMaterial, salt) {
+        let key = await window.crypto.subtle.deriveKey(
+          {'name': 'PBKDF2', 'salt': salt, 'iterations': 100000, 'hash': 'SHA-256'},
+          keyMaterial, {'name': 'AES-GCM', 'length': 256},
+          true, ['encrypt', 'decrypt']);
+        return key;
+      }
+
+      async function encrypt(plaintext, key, iv) {
+        let cipher = await window.crypto.subtle.encrypt(
+          {'name': 'AES-GCM', 'iv': iv}, key, plaintext);
+        return cipher;
+      }
+
+      async function decrypt(cipher, key, iv) {
+        let plaintext = await window.crypto.subtle.decrypt(
+          {'name': 'AES-GCM', 'iv': iv}, key, cipher);
+        return plaintext;
+      }
+
+      function generateRandomBytes(numOfBytes) {
+        return window.crypto.getRandomValues(new Uint8Array(numOfBytes));
+      }
+
+      function save(cipher, salt, iv) {
+        window.localStorage.setItem('EBAY-API-ID-CIPHER', bytesBufferToBase64(cipher));
+        window.localStorage.setItem('EBAY-API-ID-SALT', bytesBufferToBase64(salt));
+        window.localStorage.setItem('EBAY-API-ID-IV', bytesBufferToBase64(iv));
+      }
+
+      async function saveAppId() {
+        let message = document.forms[0]['appID'].value.trim();
+        if (message) {
+          let keyMaterial = await getKeyMaterial("Enter a password to encrypt your Ebay appID");
+
+          if (keyMaterial) {
+            clearAppId();
+            let iv = generateRandomBytes(12);
+            let salt = generateRandomBytes(32);
+            let key = await generateKey(keyMaterial, salt);
+            let cipher = await encrypt(stringToBytes(message), key, iv);
+            save(cipher, salt, iv);
+            alert("Saved!");
+          }
+        } else {
+          alert("Ebay appID is empty!");
+        }
+      }
+
+      async function loadAppId() {
+        let cipher = window.localStorage.getItem('EBAY-API-ID-CIPHER');
+        let salt = window.localStorage.getItem('EBAY-API-ID-SALT');
+        let iv = window.localStorage.getItem('EBAY-API-ID-IV');
+
+        if (cipher && salt && iv) {
+          let keyMaterial = await getKeyMaterial("Enter the password to decrypt your Ebay appID");
+          if (keyMaterial) {
+            try {
+              let key = await generateKey(keyMaterial, base64ToBytesBuffer(salt));
+              let message = await decrypt(base64ToBytesBuffer(cipher), key, base64ToBytesBuffer(iv));
+              document.forms[0]['appID'].value = bytesToString(message);
+            } catch(e) {
+              alert("It looks like the password was wrong!");
+            }
+          }
+        } else {
+          alert("Ebay appID was not previously saved!");
+        }
+      }
+
+      function clearAppId() {
+        window.localStorage.clear();
+      }
+
       // --------------------- UI Stuff -------------------------------------------------------
       function say(text) {
         document.getElementById("progress").innerHTML = "<p>" + text + "</p>";
@@ -216,7 +320,6 @@
 
       function updateChartWithData(bucket, oddsChart, statsChart) {
 //        alert(JSON.stringify(bucket));
-
         var xs = ['x'];
         var odds = ['Sell Odds'];
         var allAuctions = ['All Auctions'];
@@ -230,12 +333,8 @@
           soldAuctions.push(bucket.allBuckets[keys[i]].allAuctionsWithSell);
         }
 
-        oddsChart.load({
-          columns: [xs, odds]
-        });
-        statsChart.load({
-          columns: [xs, allAuctions, soldAuctions]
-        });
+        oddsChart.load({ columns: [xs, odds] });
+        statsChart.load({ columns: [xs, allAuctions, soldAuctions] });
       }
 
       function computeBucketLabel(key, bucketWidth) {
@@ -249,8 +348,15 @@
     <form>
       <table border="0" cellpadding="0" cellspacing="1">
       <tr>
-        <td valign="top" align="right"><label>Your Ebay appID (more details <a href="https://developer.ebay.com/Devzone/shopping/docs/Concepts/ShoppingAPIGuide.html#appid">here</a>): </label></td>
-        <td valign="top"><input type="text" name="appID" maxlength="128" size="50" value=""/></td>
+        <td valign="top" align="right">
+          <label>Your Ebay appID (more details <a href="https://developer.ebay.com/Devzone/shopping/docs/Concepts/ShoppingAPIGuide.html#appid">here</a>): </label>
+        </td>
+        <td valign="top">
+          <input type="text" name="appID" maxlength="128" size="50" value=""/>
+          <input type="button" name="Load" value="Load" onClick="loadAppId();"/>
+          <input type="button" name="Save" value="Save" onClick="saveAppId();"/>
+          <input type="button" name="Clear" value="Clear store" onClick="clearAppId();"/>
+        </td>
       </tr>
       <tr>
         <td valign="top" align="right"><label>Search for: </label></td>
