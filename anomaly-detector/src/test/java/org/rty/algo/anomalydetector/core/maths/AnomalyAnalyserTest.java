@@ -73,13 +73,13 @@ public class AnomalyAnalyserTest {
 	@Test
 	public void testWithPeriodicEmpty() {
 		final String[] events = {
-				"D", "D", "D", "D", "D", "D", "D", "D", "D", "E",
-				"D", "D", "D", "D", "D", "D", "D", "D", "D", "E",
-				"D", "D", "D", "D", "D", "D", "D", "D", "D", "E",
-				"D", "D", "D", "D", "D", "D", "D", "D", "D", "E",
-				"D", "D", "D", "D", "D", "D", "D", "D", "D", "E",
-				"D", "D", "D", "D", "D", "D", "D", "D", "D", "E",
-				"D", "D", "D", "D", "D", "D", "D", "D", "D", "E" };
+				"E", "E", "E", "E", "E", "E", "E", "E", "E", "D",
+				"E", "E", "E", "E", "E", "E", "E", "E", "E", "D",
+				"E", "E", "E", "E", "E", "E", "E", "E", "E", "D",
+				"E", "E", "E", "E", "E", "E", "E", "E", "E", "D",
+				"E", "E", "E", "E", "E", "E", "E", "E", "E", "D",
+				"E", "E", "E", "E", "E", "E", "E", "E", "E", "D",
+				"E", "E", "E", "E", "E", "E", "E", "E", "E", "D" };
 
 		assertEquals(
 				AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList(events), 4),
