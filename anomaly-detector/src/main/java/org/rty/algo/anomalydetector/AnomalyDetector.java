@@ -35,7 +35,7 @@ public class AnomalyDetector {
 			double _2DayProbability = AnomalyAnalyser.probabilityOfAnomalyFromTail(events, 2);
 			double chance = magic(_2DayProbability, _3DayProbability, _4DayProbability);
 
-			if (Double.compare(chance, 0.94D) > 0) {
+			if (Double.compare(chance, 0.95D) > 0) {
 				totalAlerts++;
 				System.out.println("---------------------------------------------");
 				System.out.println(events);

@@ -10,9 +10,9 @@ import org.junit.Test;
 public class AnomalyAnalyserTest {
 	private static final double ALLOWED_ERROR = 0.000000001D;
 
-	private static final double _4D_PROBABILITY = 0.912208504D;
-	private static final double _3D_PROBABILITY = 0.901234567D;
-	private static final double _2D_PROBABILITY = 0.888888888D;
+	private static final double _4D_PROBABILITY = 0.978757028D;
+	private static final double _3D_PROBABILITY = 0.976101656D;
+	private static final double _2D_PROBABILITY = 0.973114363D;
 
 	@Test
 	public void testWithEmptyList() {
@@ -44,12 +44,13 @@ public class AnomalyAnalyserTest {
 
 		assertEquals(
 				AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList(events), 4),
-				0.999562286D, ALLOWED_ERROR);
+				0.969313919D, ALLOWED_ERROR);
 		assertEquals(
 				AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList(events), 3),
-				0.999507572D, ALLOWED_ERROR);
-		assertEquals(AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList(events), 2),
-				0.995568151D, ALLOWED_ERROR);
+				0.965478159D, ALLOWED_ERROR);
+		assertEquals(
+				AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList(events), 2),
+				0.689303439D, ALLOWED_ERROR);
 	}
 
 	@Test

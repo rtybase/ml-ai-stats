@@ -40,15 +40,18 @@ public class AnomalyAnalyser {
 	private static double probabilityOfGap(List<?> allEvents) {
 		List<Integer> continuousPeriodsWithoutGaps = new ArrayList<>();
 		int continuousPeriod = 0;
-		Object lastEvent = allEvents.get(allEvents.size() - 1);
+		Object currentEvent = allEvents.get(0);
 		for (Object event : allEvents) {
-			if (lastEvent.equals(event)) {
-				continuousPeriodsWithoutGaps.add(continuousPeriod);
-				continuousPeriod = 0;
-			} else {
+			if (currentEvent.equals(event)) {
 				continuousPeriod++;
+			} else {
+				continuousPeriodsWithoutGaps.add(continuousPeriod);
+				continuousPeriod = 1;
+				currentEvent = event;
 			}
 		}
+
+		continuousPeriodsWithoutGaps.add(continuousPeriod);
 
 		if (continuousPeriodsWithoutGaps.size() <= 1) {
 			return 1.0D;
