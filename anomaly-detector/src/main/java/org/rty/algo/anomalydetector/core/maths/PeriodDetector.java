@@ -13,8 +13,7 @@ public class PeriodDetector {
 		int period = possiblePeriods.getKey();
 		double lastEventFrequency = calculateLastEventFrequency(events, period);
 
-		double confidence = 1.0D - (1.0D * period) / events.size();
-		return new PeriodDetails(period, possiblePeriods.getValue(), lastEventFrequency, confidence);
+		return new PeriodDetails(period, possiblePeriods.getValue(), lastEventFrequency);
 	}
 
 	private static double calculateLastEventFrequency(List<?> events, int period) {

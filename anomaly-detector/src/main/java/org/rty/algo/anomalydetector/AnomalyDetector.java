@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import org.rty.algo.anomalydetector.core.maths.AnomalyAnalyser;
+import org.rty.algo.anomalydetector.core.maths.AnomalyCalculator;
 
 public class AnomalyDetector {
 	private static final int ENTIRE_PERIOD = 365;
@@ -30,18 +30,13 @@ public class AnomalyDetector {
 				dataPresentEvents++;
 			}
 
-			double _4DayProbability = AnomalyAnalyser.probabilityOfAnomalyFromTail(events, 4);
-			double _3DayProbability = AnomalyAnalyser.probabilityOfAnomalyFromTail(events, 3);
-			double _2DayProbability = AnomalyAnalyser.probabilityOfAnomalyFromTail(events, 2);
-			double chance = magic(_2DayProbability, _3DayProbability, _4DayProbability);
 
-			if (Double.compare(chance, 0.95D) > 0) {
+			double chance = AnomalyCalculator.proprobabilityOfAnomaly(events);
+
+			if (Double.compare(chance, 0.5D) > 0) {
 				totalAlerts++;
 				System.out.println("---------------------------------------------");
 				System.out.println(events);
-				System.out.println("Chance of anomaly, 4d: " + _4DayProbability);
-				System.out.println("Chance of anomaly, 3d: " + _3DayProbability);
-				System.out.println("Chance of anomaly, 2d: " + _2DayProbability);
 				System.out.println("Chance: " + chance);
 			}
 		}
@@ -52,7 +47,4 @@ public class AnomalyDetector {
 		System.out.println("Data was present: " + dataPresentEvents);
 	}
 
-	private static double magic(double d2, double d3, double d4) {
-		return (d2/4 + d3/4 + d4/2);
-	}
 }
