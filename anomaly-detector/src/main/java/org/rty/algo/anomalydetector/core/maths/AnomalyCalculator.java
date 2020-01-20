@@ -14,10 +14,11 @@ public class AnomalyCalculator {
 	}
 
 	private static double nonCycleProbability(List<?> events) {
-		double _4DayProbability = AnomalyAnalyser.probabilityOfAnomalyFromTail(events, 4);
-		double _3DayProbability = AnomalyAnalyser.probabilityOfAnomalyFromTail(events, 3);
-		double _2DayProbability = AnomalyAnalyser.probabilityOfAnomalyFromTail(events, 2);
+		AnomalyAnalyser analyser = new AnomalyAnalyser(events);
+		double _4DayProbability = analyser.probabilityOfAnomalyFromTail(4);
+		double _3DayProbability = analyser.probabilityOfAnomalyFromTail(3);
+		double _2DayProbability = analyser.probabilityOfAnomalyFromTail(2);
 
-		return (_2DayProbability / 4 + _3DayProbability / 4 + _4DayProbability / 2);
+		return (_2DayProbability / 12 + _3DayProbability / 7 + _4DayProbability / 3);
 	}
 }

@@ -16,58 +16,66 @@ public class AnomalyAnalyserTest {
 
 	@Test
 	public void testWithEmptyList() {
+		AnomalyAnalyser analyser = new AnomalyAnalyser(Collections.emptyList());
 		assertEquals(
-				AnomalyAnalyser.probabilityOfAnomalyFromTail(Collections.emptyList(), 4),
+				analyser.probabilityOfAnomalyFromTail(4),
 				0.0D, ALLOWED_ERROR);
 	}
 
 	@Test
 	public void testWithExceedingTailSize() {
+		AnomalyAnalyser analyser = new AnomalyAnalyser(Arrays.asList("D"));
 		assertEquals(
-				AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList("D"), 4),
+				analyser.probabilityOfAnomalyFromTail(4),
 				0.0D, ALLOWED_ERROR);
 	}
 	
 	@Test
 	public void testWithSmallList() {
+		AnomalyAnalyser analyser = new AnomalyAnalyser(Arrays.asList("D"));
 		assertEquals(
-				AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList("D"), 1),
+				analyser.probabilityOfAnomalyFromTail(1),
 				0.0D, ALLOWED_ERROR);
+
+		analyser = new AnomalyAnalyser(Arrays.asList("D", "D"));
 		assertEquals(
-				AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList("D", "D"), 1),
+				analyser.probabilityOfAnomalyFromTail(1),
 				0.0D, ALLOWED_ERROR);
 	}
 
 	@Test
 	public void testWithNonPeriodicData() {
-		final String[] events = { "D", "D", "D", "D", "D", "D", "D", "D", "D", "E", "D" };
+		String[] events = { "D", "D", "D", "D", "D", "D", "D", "D", "D", "E", "D" };
+		AnomalyAnalyser analyser = new AnomalyAnalyser(Arrays.asList(events));
 
 		assertEquals(
-				AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList(events), 4),
+				analyser.probabilityOfAnomalyFromTail(4),
 				0.969313919D, ALLOWED_ERROR);
 		assertEquals(
-				AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList(events), 3),
+				analyser.probabilityOfAnomalyFromTail(3),
 				0.965478159D, ALLOWED_ERROR);
 		assertEquals(
-				AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList(events), 2),
+				analyser.probabilityOfAnomalyFromTail(2),
 				0.689303439D, ALLOWED_ERROR);
 	}
 
 	@Test
 	public void testWithPeriodicData() {
-		final String[] events = {
+		String[] events = {
 				"D", "D", "D", "D", "D", "D", "D", "D", "D", "E",
 				"D", "D", "D", "D", "D", "D", "D", "D", "D", "E",
 				"D", "D", "D", "D", "D", "D", "D", "D", "D", "E",
 				"D", "D", "D", "D", "D", "D", "D", "D", "D", "E" };
+		AnomalyAnalyser analyser = new AnomalyAnalyser(Arrays.asList(events));
 
 		assertEquals(
-				AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList(events), 4),
+				analyser.probabilityOfAnomalyFromTail(4),
 				_4D_PROBABILITY, ALLOWED_ERROR);
 		assertEquals(
-				AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList(events), 3),
+				analyser.probabilityOfAnomalyFromTail(3),
 				_3D_PROBABILITY, ALLOWED_ERROR);
-		assertEquals(AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList(events), 2),
+		assertEquals(
+				analyser.probabilityOfAnomalyFromTail(2),
 				_2D_PROBABILITY, ALLOWED_ERROR);
 	}
 	
@@ -81,15 +89,16 @@ public class AnomalyAnalyserTest {
 				"E", "E", "E", "E", "E", "E", "E", "E", "E", "D",
 				"E", "E", "E", "E", "E", "E", "E", "E", "E", "D",
 				"E", "E", "E", "E", "E", "E", "E", "E", "E", "D" };
+		AnomalyAnalyser analyser = new AnomalyAnalyser(Arrays.asList(events));
 
 		assertEquals(
-				AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList(events), 4),
+				analyser.probabilityOfAnomalyFromTail(4),
 				_4D_PROBABILITY, ALLOWED_ERROR);
 		assertEquals(
-				AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList(events), 3),
+				analyser.probabilityOfAnomalyFromTail(3),
 				_3D_PROBABILITY, ALLOWED_ERROR);
 		assertEquals(
-				AnomalyAnalyser.probabilityOfAnomalyFromTail(Arrays.asList(events), 2),
+				analyser.probabilityOfAnomalyFromTail(2),
 				_2D_PROBABILITY, ALLOWED_ERROR);
 	}
 }

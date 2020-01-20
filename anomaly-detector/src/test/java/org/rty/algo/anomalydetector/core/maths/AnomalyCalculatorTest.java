@@ -37,7 +37,7 @@ public class AnomalyCalculatorTest {
 				"E", "D", "D", "D" };
 
 		double result = AnomalyCalculator.proprobabilityOfAnomaly(Arrays.asList(events));
-		assertEquals(result, 0.2060519D, 0.0001D);
+		assertEquals(result, 0.1475466D, 0.0001D);
 	}
 
 	@Test
@@ -53,6 +53,6 @@ public class AnomalyCalculatorTest {
 				"D", "D" };
 
 		double result = AnomalyCalculator.proprobabilityOfAnomaly(Arrays.asList(events));
-		assertEquals(result, 0.883925D, 0.0001D);
+		assertEquals(result, 0.852464D, 0.0001D);
 	}
 }
