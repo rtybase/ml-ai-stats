@@ -50,6 +50,24 @@ public class AnomalyAnalyser {
 			return 0.0D;
 		}
 
+		List<Integer> continuousPeriodsWithoutGaps = computePeriodsWithoutGaps(allEvents);
+		if (continuousPeriodsWithoutGaps.size() <= 1) {
+			return 1.0D;
+		}
+
+		Stats stats = Stats.of(continuousPeriodsWithoutGaps);
+		double std = stats.populationStandardDeviation();
+		if (Double.compare(std, 0.000001) < 0) {
+			return 1.0D;
+		}
+
+		return calculateNormalDistribution(
+				continuousPeriodsWithoutGaps.get(continuousPeriodsWithoutGaps.size() - 1),
+				stats.mean(),
+				std);
+	}
+
+	private static List<Integer> computePeriodsWithoutGaps(List<?> allEvents) {
 		List<Integer> continuousPeriodsWithoutGaps = new ArrayList<>();
 		int continuousPeriod = 0;
 		Object currentEvent = allEvents.get(0);
@@ -64,19 +82,11 @@ public class AnomalyAnalyser {
 		}
 
 		continuousPeriodsWithoutGaps.add(continuousPeriod);
+		return continuousPeriodsWithoutGaps;
+	}
 
-		if (continuousPeriodsWithoutGaps.size() <= 1) {
-			return 1.0D;
-		}
-
-		Stats stats = Stats.of(continuousPeriodsWithoutGaps);
-		double std = stats.populationStandardDeviation();
-		if (Double.compare(std, 0.000001) < 0) {
-			return 1.0D;
-		}
-
-		double lastEntry = 1.0D * continuousPeriodsWithoutGaps.get(continuousPeriodsWithoutGaps.size() - 1);
-		double normalisedValue = (lastEntry - stats.mean()) / std;
+	private static double calculateNormalDistribution(int x, double mean, double std) {
+		double normalisedValue = (1.0D * x - mean) / std;
 		return Math.exp((normalisedValue * normalisedValue) / -2.0D) / Math.sqrt(2 * Math.PI);
 	}
 }
