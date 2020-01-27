@@ -4,10 +4,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import org.rty.algo.anomalydetector.core.ListUtils;
 import com.google.common.math.Stats;
 
 public class AnomalyAnalyser {
+	private static final double SQRT_OF_2_PI = Math.sqrt(2 * Math.PI);
+
 	private final List<?> events;
 	private final MarkovChainTransitions transitions = new MarkovChainTransitions();
 	private final double probabilityOfGap;
@@ -27,19 +28,18 @@ public class AnomalyAnalyser {
 			return 0.0D;
 		}
 
-		List<?> tail = ListUtils.extractTail(events, tailSize);
-		double probabilityOfTailEvents = probabilityOfTailEvents(tail);
+		double probabilityOfTailEvents = probabilityOfTailEvents(tailSize);
 		return 1.0D - probabilityOfGap * probabilityOfTailEvents;
 	}
 
-	private double probabilityOfTailEvents(List<?> subEvents) {
-		if (events.size() < 2 || subEvents.size() < 2) {
+	private double probabilityOfTailEvents(int tailSize) {
+		if (events.size() < 2 || tailSize < 2) {
 			return 1.0D;
 		}
 
 		double probability = 1.0D;
-		for (int i = 1; i < subEvents.size(); i++) {
-			double transitionProbability = transitions.getTransitionProbability(subEvents.get(i - 1), subEvents.get(i));
+		for (int i = events.size() - tailSize + 1; i < events.size(); i++) {
+			double transitionProbability = transitions.getTransitionProbability(events.get(i - 1), events.get(i));
 			probability *= transitionProbability;
 		}
 		return probability;
@@ -86,7 +86,7 @@ public class AnomalyAnalyser {
 	}
 
 	private static double calculateNormalDistribution(int x, double mean, double std) {
-		double normalisedValue = (1.0D * x - mean) / std;
-		return Math.exp((normalisedValue * normalisedValue) / -2.0D) / Math.sqrt(2 * Math.PI);
+		double normalisedValue = (x - mean) / std;
+		return Math.exp((normalisedValue * normalisedValue) / -2.0D) / SQRT_OF_2_PI;
 	}
 }

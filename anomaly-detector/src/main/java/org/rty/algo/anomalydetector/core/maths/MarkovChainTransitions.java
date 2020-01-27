@@ -8,11 +8,11 @@ public class MarkovChainTransitions {
 	private final Map<String, Integer> fromNodeToNode = new HashMap<>();
 
 	public void addPath(Object fromNode, Object toNode) {
-		Integer currentValue = fromNodeTotal.computeIfAbsent(fromNode, k -> new Integer(0));
+		Integer currentValue = fromNodeTotal.computeIfAbsent(fromNode, k -> Integer.valueOf(0));
 		fromNodeTotal.put(fromNode, currentValue + 1);
 
 		String key = computeKey(fromNode, toNode);
-		currentValue = fromNodeToNode.computeIfAbsent(key, k -> new Integer(0));
+		currentValue = fromNodeToNode.computeIfAbsent(key, k -> Integer.valueOf(0));
 		fromNodeToNode.put(key, currentValue + 1);
 	}
 
